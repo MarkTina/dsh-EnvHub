@@ -38,8 +38,8 @@ function build(require) {
   /* 文案                                                                */
   /* ------------------------------------------------------------------ */
   var ZH = {
-    'nav': 'dsh-EnvHub',
-    'panel.title': 'dsh-EnvHub',
+    'nav': '环境变量管理器',
+    'panel.title': '环境变量管理器',
     'panel.subtitle': '共 {count} 个变量 · {groups} 个组 · {tags} 个标签',
     'toolbar.search': '搜索变量名或值…',
     'toolbar.source': '来源',
@@ -54,6 +54,11 @@ function build(require) {
     'view.vars': '变量',
     'view.groups': '分组',
     'view.tags': '标签',
+    'view.detail': '详细',
+    'view.board': '看板',
+    'view.dimGroup': '按分组',
+    'view.dimTag': '按标签',
+    'board.hint': '看板按当前筛选结果展示；点击卡片可编辑组织信息。',
     'view.group': '按组',
     'view.tag': '按标签',
     'view.all': '全部',
@@ -81,7 +86,7 @@ function build(require) {
     'batch.selectAll': '全选',
     'batch.invert': '反选',
     'batch.clear': '清空选择',
-    'shortcut.label': '打开/收起 dsh-EnvHub',
+    'shortcut.label': '打开/收起 环境变量管理器',
     'card.copyKey': 'Key',
     'card.copyKV': 'Key+值',
     'bulk.title': '批量设置分组与标签',
@@ -201,8 +206,8 @@ function build(require) {
     'common.delete': '删除',
   };
   var EN = Object.assign({}, ZH, {
-    'nav': 'dsh-EnvHub',
-    'panel.title': 'dsh-EnvHub',
+    'nav': 'Environment Variable Manager',
+    'panel.title': 'Environment Variable Manager',
     'toolbar.search': 'Search name or value…',
     'toolbar.showValues': 'Show values',
     'toolbar.hideValues': 'Hide values',
@@ -391,7 +396,7 @@ function build(require) {
     + '.em-tabs{display:flex;gap:4px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);}'
     + '.em-tab{border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;}'
     + '.em-tab.active{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l1);}'
-    + '.em-scroll{flex:1 1 0%;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:12px 16px 24px;}'
+    + '.em-scroll{flex:1 1 0%;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px 16px 24px;}'
     + '.em-card{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:hidden;}'
     + '.em-card-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);}'
     + '.em-card-name{font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;}'
@@ -442,6 +447,21 @@ function build(require) {
     + '.em-statline{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;}'
     + '.em-stat{padding:2px 10px;border-radius:999px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);}'
     + '.em-stat b{color:var(--dsw-alias-label-primary);font-weight:600;}'
+    + '.em-viewbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);}'
+    + '.em-seg{display:inline-flex;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;}'
+    + '.em-seg-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary);font-size:12px;padding:4px 12px;cursor:pointer;}'
+    + '.em-seg-btn.on{background:var(--dsw-alias-brand-primary);color:#fff;}'
+    + '.em-board{display:flex;gap:12px;align-items:flex-start;padding-bottom:8px;}'
+    + '.em-kcol{flex:0 0 264px;max-width:264px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);display:flex;flex-direction:column;}'
+    + '.em-kcol-head{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);border-radius:12px 12px 0 0;}'
+    + '.em-kcol-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '.em-kcol-count{color:var(--dsw-alias-label-secondary);font-size:12px;margin-left:auto;}'
+    + '.em-kcol-body{display:flex;flex-direction:column;gap:8px;padding:8px;}'
+    + '.em-kcol-empty{color:var(--dsw-alias-label-secondary);font-size:12px;padding:14px;text-align:center;}'
+    + '.em-kcard{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-base);padding:8px 10px;cursor:pointer;}'
+    + '.em-kcard:hover{background:var(--dsw-alias-bg-layer-2);}'
+    + '.em-kcard-top{display:flex;align-items:center;gap:6px;}'
+    + '.em-kcard-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}'
     + '.em-icon-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary);padding:3px;border-radius:6px;cursor:pointer;line-height:0;}'
     + '.em-icon-btn:hover{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);}'
     + '.em-batch{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);}'
@@ -498,6 +518,8 @@ function build(require) {
     var showState = useState(false); var showValues = showState[0]; var setShowValues = showState[1];
     var srcState = useState('all'); var sourceFilter = srcState[0]; var setSourceFilter = srcState[1];
     var viewState = useState('vars'); var viewMode = viewState[0]; var setViewMode = viewState[1];
+    var vkState = useState('detail'); var viewKind = vkState[0]; var setViewKind = vkState[1];
+    var bdState = useState('group'); var boardDim = bdState[0]; var setBoardDim = bdState[1];
     var selState = useState({}); var selected = selState[0]; var setSelected = selState[1];
     var fmtState = useState('kv'); var format = fmtState[0]; var setFormat = fmtState[1];
     var incState = useState(false); var includeValues = incState[0]; // 复制是否带值改由按钮决定，保留状态仅兼容
@@ -874,10 +896,83 @@ function build(require) {
       );
     }
 
+    function renderViewBar() {
+      function segBtn(on, label, onClick) { return h('button', { className: 'em-seg-btn' + (on ? ' on' : ''), onClick: onClick }, label); }
+      return h('div', { className: 'em-viewbar' },
+        h('span', { className: 'em-seg' },
+          segBtn(viewKind === 'detail', tt('view.detail'), function () { setViewKind('detail'); }),
+          segBtn(viewKind === 'board', tt('view.board'), function () { setViewKind('board'); })),
+        viewKind === 'board' ? h('span', { className: 'em-seg', style: { marginLeft: '8px' } },
+          segBtn(boardDim === 'group', tt('view.dimGroup'), function () { setBoardDim('group'); }),
+          segBtn(boardDim === 'tag', tt('view.dimTag'), function () { setBoardDim('tag'); })) : null,
+        h('span', { style: { flex: '1' } }),
+        viewKind === 'board' ? h('span', { className: 'em-hint' }, tt('board.hint')) : null
+      );
+    }
+
+    function boardColumns() {
+      if (boardDim === 'tag') {
+        var tags = (meta.tags || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+        var cols = tags.map(function (t) { return { id: t.id, name: t.name || t.id, color: t.color, items: [] }; });
+        var byId = {}; cols.forEach(function (c) { byId[c.id] = c; });
+        var untagged = { id: null, name: tt('group.untagged'), color: null, items: [] };
+        filtered.forEach(function (it) {
+          var e = entryOf(it.name);
+          var ts = (e && e.tags) || [];
+          var hit = false;
+          ts.forEach(function (tid) { if (byId[tid]) { byId[tid].items.push(it); hit = true; } });
+          if (!hit) untagged.items.push(it);
+        });
+        if (untagged.items.length) cols.push(untagged);
+        return cols;
+      }
+      var groups = (meta.groups || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      var gcols = groups.map(function (g) { return { id: g.id, name: g.name || g.id, color: g.color, items: [] }; });
+      var gById = {}; gcols.forEach(function (c) { gById[c.id] = c; });
+      var ungrouped = { id: null, name: tt('group.ungrouped'), color: null, items: [] };
+      filtered.forEach(function (it) {
+        var e = entryOf(it.name);
+        var gid = e && e.group;
+        if (gid && gById[gid]) gById[gid].items.push(it); else ungrouped.items.push(it);
+      });
+      if (ungrouped.items.length || !groups.length) gcols.push(ungrouped);
+      return gcols;
+    }
+
+    function renderKCard(it) {
+      var e = entryOf(it.name);
+      var tags = (e && e.tags) || [];
+      var tagNames = tags.map(function (tid) { var t = (meta.tags || []).filter(function (x) { return x.id === tid; })[0]; return t ? (t.name || t.id) : null; }).filter(Boolean);
+      return h('div', { key: it.name, className: 'em-kcard', title: tt('row.editMeta'), onClick: function () { openMetaEditor(it); } },
+        h('div', { className: 'em-kcard-top' },
+          h('span', { className: 'em-name', title: it.name }, it.name),
+          it.sensitive ? h('span', { title: tt('row.locked'), style: { color: 'var(--dsw-alias-state-error-primary)', lineHeight: 0, flex: 'none' } }, Icon('lock', 13)) : null),
+        h('div', { className: 'em-kcard-meta' },
+          h('span', { className: 'em-badges' }, it.sources.map(function (s) { return h('span', { key: s, className: 'em-badge ' + s, title: s }, tt('src.' + s)); })),
+          tagNames.length ? h('span', { className: 'em-badges' }, tagNames.map(function (n, i) { return h('span', { key: i, className: 'em-tag' }, n); })) : null)
+      );
+    }
+
+    function renderBoard() {
+      var cols = boardColumns();
+      if (!cols.length) return h('div', { className: 'em-empty' }, h('b', null, boardDim === 'group' ? tt('groups.empty') : tt('tags.empty')));
+      return h('div', { className: 'em-board' }, cols.map(function (c) {
+        return h('div', { key: c.id === null ? '__none__' : c.id, className: 'em-kcol' },
+          h('div', { className: 'em-kcol-head' },
+            c.color ? h('span', { className: 'em-dot', style: { background: c.color } }) : null,
+            h('span', { className: 'em-kcol-name' }, c.name),
+            h('span', { className: 'em-kcol-count' }, c.items.length)),
+          h('div', { className: 'em-kcol-body' },
+            c.items.length ? c.items.map(renderKCard) : h('div', { className: 'em-kcol-empty' }, tt('empty.title')))
+        );
+      }));
+    }
+
     function renderBody() {
       if (loading) return h('div', { className: 'em-empty' }, tt('loading'));
       if (error) return h('div', { className: 'em-empty' }, h('b', null, tt('error.load', { msg: error })), h('button', { className: 'em-btn', onClick: load }, tt('toolbar.refresh')));
       if (!filtered.length) return h('div', { className: 'em-empty' }, h('b', null, tt('empty.title')), tt('empty.body'));
+      if (viewKind === 'board') return renderBoard();
       return renderVarsCard();
     }
 
@@ -904,6 +999,7 @@ function build(require) {
         h('button', { className: 'em-btn', onClick: function () { setDialog({ type: 'importPick' }); } }, Icon('upload', 14), tt('toolbar.import')),
         h('button', { className: 'em-btn icon', title: tt('toolbar.backups'), onClick: function () { setDialog({ type: 'backups', items: null }); callApi('listBackups').then(function (r) { setDialog({ type: 'backups', items: (r && r.items) || [] }); }); } }, Icon('history', 15))
       ),
+      renderViewBar(),
       renderFilters(),
       renderActionBar(),
       data && data.unsupported ? h('div', { className: 'em-hint', style: { padding: '0 16px 6px', color: 'var(--dsw-alias-state-warn-primary)' } }, tt('unsupported')) : null,
