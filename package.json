@@ -1,6 +1,6 @@
 {
   "name": "dsh-envhub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "dsh-EnvHub — 环境变量管理器：读取本机进程 / 用户级 / 系统级环境变量，按组与标签管理，多格式复制、选择性导出与跨设备导入。 | Environment Variable Manager for DeepSeek Harness.",
   "icon": "icon.svg",
   "type": "module",

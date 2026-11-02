@@ -92,6 +92,10 @@ function build(require) {
     'bulk.newTag': '新建标签…',
     'bulk.apply': '应用到 {count} 项',
     'bulk.cancel': '取消',
+    'bulk.tagMode': '标签处理',
+    'bulk.tagReplace': '覆盖为所选标签',
+    'bulk.tagAppend': '追加到现有标签',
+    'bulk.tagsHint': '「覆盖」会把所选变量的标签替换为上面勾选的标签；「追加」只新增、不移除。',
     'format.label': '格式',
     'format.kv': 'KEY=VALUE',
     'format.colon': 'KEY: VALUE',
@@ -859,7 +863,7 @@ function build(require) {
         h('span', { className: 'em-card-count' }, tt('batch.selected', { count: n })),
         h('button', { className: 'em-btn primary', disabled: n === 0, onClick: function () { doCopy(selectedItems, false); } }, Icon('copy', 13), tt('batch.copyKey')),
         h('button', { className: 'em-btn primary', disabled: n === 0, onClick: function () { doCopy(selectedItems, true); } }, Icon('copy', 13), tt('batch.copyKV')),
-        h('button', { className: 'em-btn', disabled: n === 0, onClick: function () { setDialog({ type: 'bulkMeta', draft: { groupChange: false, group: null, tags: [] } }); } }, Icon('tag', 13), tt('batch.setMeta')),
+        h('button', { className: 'em-btn', disabled: n === 0, onClick: function () { openBulkMeta(); } }, Icon('tag', 13), tt('batch.setMeta')),
         h('span', { style: { flex: '1' } }),
         h('button', { className: 'em-btn', disabled: filtered.length === 0, onClick: function () { selectMany(filtered, !allOn); } }, tt('batch.selectAll')),
         h('button', { className: 'em-btn', disabled: filtered.length === 0, onClick: function () { setSelected(function (cur) { var next = Object.assign({}, cur); filtered.forEach(function (it) { if (next[it.name]) delete next[it.name]; else next[it.name] = true; }); return next; }); } }, tt('batch.invert')),
@@ -1030,6 +1034,17 @@ function build(require) {
       ]);
     }
 
+    function openBulkMeta() {
+      var common = null;
+      selectedItems.forEach(function (it) {
+        var e = entryOf(it.name);
+        var ts = (e && e.tags) ? e.tags.slice() : [];
+        if (common === null) common = ts;
+        else common = common.filter(function (t) { return ts.indexOf(t) !== -1; });
+      });
+      setDialog({ type: 'bulkMeta', draft: { groupChange: false, group: null, tags: common || [], tagMode: 'replace' } });
+    }
+
     function bulkMetaApply() {
       if (!dialog || dialog.type !== 'bulkMeta') return;
       var d = dialog.draft;
@@ -1038,10 +1053,14 @@ function build(require) {
       selectedItems.forEach(function (it) {
         var cur = next.entries[it.name] || { group: null, tags: [], note: '', pinned: false, order: 0 };
         if (d.groupChange) cur.group = d.group === undefined ? null : d.group;
-        var set = {};
-        (cur.tags || []).forEach(function (t) { set[t] = true; });
-        (d.tags || []).forEach(function (t) { set[t] = true; });
-        cur.tags = Object.keys(set);
+        if (d.tagMode === 'append') {
+          var set = {};
+          (cur.tags || []).forEach(function (t) { set[t] = true; });
+          (d.tags || []).forEach(function (t) { set[t] = true; });
+          cur.tags = Object.keys(set);
+        } else {
+          cur.tags = (d.tags || []).slice();
+        }
         next.entries[it.name] = cur;
       });
       saveMeta(next, tt('toast.saved')).then(function (ok) { if (ok) setDialog(null); });
@@ -1075,6 +1094,11 @@ function build(require) {
             groups.map(function (g) { return h('option', { key: g.id, value: g.id }, g.name || g.id); })
           )
         ),
+        h('div', { className: 'em-field' }, h('span', null, tt('bulk.tagMode')),
+          h('select', { className: 'em-select', value: d.tagMode || 'replace', onChange: function (e) { setDraft({ tagMode: e.target.value }); } },
+            h('option', { value: 'replace' }, tt('bulk.tagReplace')),
+            h('option', { value: 'append' }, tt('bulk.tagAppend'))
+          )),
         h('div', { className: 'em-field' }, h('span', null, tt('bulk.tags')),
           h('div', { className: 'em-chips' }, tags.map(function (t) {
             var on = d.tags.indexOf(t.id) !== -1;
@@ -1083,7 +1107,8 @@ function build(require) {
           h('div', { className: 'em-inline' },
             h('input', { className: 'em-input', placeholder: tt('bulk.newTag'), onKeyDown: function (e) { if (e.key === 'Enter' && e.target.value.trim()) { addBulkTag(e.target.value.trim()); e.target.value = ''; } } }),
             h('span', { className: 'em-hint' }, '⏎')
-          )
+          ),
+          h('div', { className: 'em-hint' }, tt('bulk.tagsHint'))
         )
       ];
       return overlay(tt('bulk.title'), body, [
