@@ -1,0 +1,72 @@
+{
+  "name": "dsh-envhub",
+  "version": "1.0.0",
+  "description": "dsh-EnvHub — 环境变量管理器：读取本机进程 / 用户级 / 系统级环境变量，按组与标签管理，多格式复制、选择性导出与跨设备导入。 | Environment Variable Manager for DeepSeek Harness.",
+  "icon": "icon.svg",
+  "type": "module",
+  "author": "MarkTina",
+  "license": "MIT",
+  "homepage": "https://github.com/MarkTina/dsh-EnvHub#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarkTina/dsh-EnvHub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MarkTina/dsh-EnvHub/issues"
+  },
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "dsh": ">=0.2.0-rc.2"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh-envhub",
+    "environment",
+    "env",
+    "variables",
+    "sidebar",
+    "panel"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check client.js",
+    "test": "node test/host-logic.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    },
+    "compatibility": {
+      "dsh": "0.2.0-rc.2",
+      "dshReleases": {
+        "0.2.0-rc.2": "compatible"
+      }
+    }
+  }
+}

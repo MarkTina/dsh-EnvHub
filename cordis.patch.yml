@@ -1,0 +1,7 @@
+# 环境变量管理器 bundle 层：插入插件行。
+# 行 id 由本包拥有；config 是默认值，用户可在 profile 的 cordis.patch.yml 中
+# 以同名 id 覆盖（patch 的 config 是整体替换，不深合并）。
+- insert:
+    - id: envhub
+      name: 'dsh-envhub'
+      config: {}
