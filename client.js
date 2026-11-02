@@ -580,7 +580,7 @@ function build(require) {
       filtered.forEach(function (it) {
         var e = entryOf(it.name);
         var gid = e && e.group;
-        if (gid && byId[gid]) byId[gid].items.push(it); else ungrouped.items.push(it);
+        if (gid && byId[gid]) byId[gid].items.push(it); else ungroupedialog.items.push(it);
       });
       buckets.push(ungrouped);
       return buckets;
@@ -596,7 +596,7 @@ function build(require) {
         var ts = (e && e.tags) || [];
         var hit = false;
         ts.forEach(function (tid) { if (byId[tid]) { byId[tid].items.push(it); hit = true; } });
-        if (!hit) untagged.items.push(it);
+        if (!hit) untaggedialog.items.push(it);
       });
       buckets.push(untagged);
       return buckets;
@@ -668,14 +668,14 @@ function build(require) {
       }
       var args = d.isNew
         ? { action: 'setVar', name: d.name, value: d.value, scope: d.scope }
-        : { action: 'setVar', name: d.item.name, value: d.value, scope: d.scope };
+        : { action: 'setVar', name: dialog.item.name, value: d.value, scope: d.scope };
       if (d.isNew) {
         callApi('setVar', { name: d.name, value: d.value, scope: d.scope }).then(function (res) {
           if (res && res.ok) { setDialog(null); showToast(tt('toast.written')); load(); }
           else showToast(tt('toast.writeFailed', { msg: (res && res.message) || '' }), true);
         }).catch(function (e) { showToast(tt('toast.writeFailed', { msg: String((e && e.message) || e) }), true); });
       } else {
-        callApi('setVar', { name: d.item.name, value: d.value, scope: d.scope }).then(function (res) {
+        callApi('setVar', { name: dialog.item.name, value: d.value, scope: d.scope }).then(function (res) {
           if (res && res.ok) { setDialog(null); showToast(tt('toast.written')); load(); }
           else showToast(tt('toast.writeFailed', { msg: (res && res.message) || '' }), true);
         }).catch(function (e) { showToast(tt('toast.writeFailed', { msg: String((e && e.message) || e) }), true); });
@@ -908,7 +908,7 @@ function build(require) {
       renderActionBar(),
       data && data.unsupported ? h('div', { className: 'em-hint', style: { padding: '0 16px 6px', color: 'var(--dsw-alias-state-warn-primary)' } }, tt('unsupported')) : null,
       h('div', { className: 'em-scroll', ref: scrollRef, style: scrollH ? { height: scrollH + 'px', maxHeight: scrollH + 'px' } : null }, renderBody()),
-      dialog ? renderDialog() : null,
+      dialog ? safeDialog() : null,
       toast ? h('div', { className: 'em-toast' + (toast.error ? ' error' : '') }, toast.msg) : null
     );
 
@@ -1017,6 +1017,18 @@ function build(require) {
       if (dialog.type === 'groupEdit' || dialog.type === 'tagEdit') return renderGroupTagEdit();
       if (dialog.type === 'manage') return renderManageDialog();
       return null;
+    }
+
+    function safeDialog() {
+      try {
+        return renderDialog();
+      } catch (error) {
+        try { console.error('[envhub] dialog render failed:', error && (error.stack || error.message)); } catch (ignored) { /* ignore */ }
+        return h('div', { className: 'em-overlay' }, h('div', { className: 'em-dialog' },
+          h('div', { className: 'em-dialog-body' }, 'Dialog error: ' + String((error && error.message) || error)),
+          h('div', { className: 'em-dialog-foot' }, h('button', { className: 'em-btn', onClick: function () { setDialog(null); } }, tt('common.close')))
+        ));
+      }
     }
 
     function renderRenameDialog() {
@@ -1155,7 +1167,7 @@ function build(require) {
         h('div', { className: 'em-field' }, h('span', null, tt('meta.note')), h('textarea', { className: 'em-textarea', value: d.note || '', onChange: function (e) { setDraft({ note: e.target.value }); } })),
         h(Checkbox, { checked: d.pinned === true, label: tt('meta.pinned'), onChange: function (v) { setDraft({ pinned: v }); } })
       ];
-      return overlay(d.item.name, body, [
+      return overlay(dialog.item.name, body, [
         h('button', { className: 'em-btn', onClick: function () { setDialog(null); } }, tt('meta.cancel')),
         h('button', { className: 'em-btn primary', onClick: applyMetaSave }, tt('meta.save')),
       ]);
@@ -1196,10 +1208,10 @@ function build(require) {
             h('option', { value: 'machine' }, tt('edit.scope.machine'))
           )),
         h('div', { className: 'em-warn' }, tt('edit.warn')),
-        (!d.isNew && d.item && d.item.protected) ? h('div', { className: 'em-warn' }, tt('edit.warnProtected')) : null
+        (!d.isNew && dialog.item && dialog.item.protected) ? h('div', { className: 'em-warn' }, tt('edit.warnProtected')) : null
       ];
       var foot = [h('button', { className: 'em-btn', onClick: function () { setDialog(null); } }, tt('edit.cancel'))];
-      if (!d.isNew) foot.push(h('button', { className: 'em-btn danger', onClick: function () { deleteVar(d.item); } }, Icon('trash', 14), tt('edit.delete')));
+      if (!d.isNew) foot.push(h('button', { className: 'em-btn danger', onClick: function () { deleteVar(dialog.item); } }, Icon('trash', 14), tt('edit.delete')));
       foot.push(h('button', { className: 'em-btn primary', onClick: applyValueSave }, tt('edit.save')));
       return overlay(d.isNew ? tt('edit.title.new') : tt('edit.title.edit'), body, foot);
     }
