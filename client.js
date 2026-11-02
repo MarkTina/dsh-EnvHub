@@ -157,6 +157,7 @@ function build(require) {
     'vars.empty': '没有匹配的变量',
     'groups.empty': '还没有分组，点右上角「新建分组」。',
     'tags.empty': '还没有标签，点右上角「新建标签」。',
+    'filter.source': '来源',
     'filter.group': '分组',
     'filter.tag': '标签',
     'filter.all': '全部',
@@ -222,6 +223,7 @@ function build(require) {
     'view.group': 'By group',
     'view.tag': 'By tag',
     'view.all': 'All',
+    'filter.source': 'Source',
     'group.ungrouped': 'Ungrouped',
     'group.untagged': 'Untagged',
   });
@@ -360,6 +362,7 @@ function build(require) {
     tag: ['M3 12l8-8h9v9l-8 8z', 'M8 8h.01'],
     history: ['M12 8v5l3 2', 'M3 12a9 9 0 1 0 9-9 9 9 0 0 0-9 9z'],
     more: ['M6 12h.01', 'M12 12h.01', 'M18 12h.01'],
+    layers: ['M12 3l9 5-9 5-9-5z', 'M3 13l9 5 9-5'],
   };
 
   function Icon(name, size, extra) {
@@ -521,7 +524,7 @@ function build(require) {
     var errState = useState(null); var error = errState[0]; var setError = errState[1];
     var qState = useState(''); var query = qState[0]; var setQuery = qState[1];
     var showState = useState(false); var showValues = showState[0]; var setShowValues = showState[1];
-    var srcState = useState('all'); var sourceFilter = srcState[0]; var setSourceFilter = srcState[1];
+    var srcState = useState([]); var sourceFilters = srcState[0]; var setSourceFilters = srcState[1];
     var viewState = useState('vars'); var viewMode = viewState[0]; var setViewMode = viewState[1];
     var vkState = useState('detail'); var viewKind = vkState[0]; var setViewKind = vkState[1];
     var bdState = useState('group'); var boardDim = bdState[0]; var setBoardDim = bdState[1];
@@ -569,7 +572,7 @@ function build(require) {
       var t2 = setTimeout(calc, 400);
       window.addEventListener('resize', calc);
       return function () { window.removeEventListener('resize', calc); clearTimeout(t1); clearTimeout(t2); };
-    }, [loading, data, groupFilter, tagFilters, sourceFilter, showValues]);
+    }, [loading, data, groupFilter, tagFilters, sourceFilters, showValues]);
 
     var meta = (data && data.meta) || { groups: [], tags: [], entries: {} };
     var items = (data && data.items) || [];
@@ -581,7 +584,7 @@ function build(require) {
     var filtered = useMemo(function () {
       var q = query.trim().toLowerCase();
       return items.filter(function (it) {
-        if (sourceFilter !== 'all' && it.sources.indexOf(sourceFilter) === -1) return false;
+        if (sourceFilters && sourceFilters.length && !it.sources.some(function (s) { return sourceFilters.indexOf(s) !== -1; })) return false;
         var e = entryOf(it.name);
         if (groupFilter === '__none__') { if (e && e.group) return false; }
         else if (groupFilter) { if (!(e && e.group === groupFilter)) return false; }
@@ -593,7 +596,7 @@ function build(require) {
         if (!q) return true;
         return it.name.toLowerCase().indexOf(q) !== -1 || (showValues && String(it.value).toLowerCase().indexOf(q) !== -1);
       });
-    }, [items, query, sourceFilter, showValues, groupFilter, tagFilters, meta]);
+    }, [items, query, sourceFilters, showValues, groupFilter, tagFilters, meta]);
 
     var selectedItems = useMemo(function () {
       return items.filter(function (it) { return selected[it.name] === true; });
@@ -855,11 +858,13 @@ function build(require) {
     }
 
     function filterRow(kind, label, chips) {
+      var icon = kind === 'group' ? Icon('folder', 13) : kind === 'tag' ? Icon('tag', 13) : Icon('layers', 13);
+      var manage = kind === 'group' || kind === 'tag';
       return h('div', { className: 'em-frow' },
-        h('span', { className: 'em-flabel' }, kind === 'group' ? Icon('folder', 13) : Icon('tag', 13), label),
+        h('span', { className: 'em-flabel' }, icon, label),
         h('div', { className: 'em-fchips' }, chips),
-        h('button', { className: 'em-btn icon', title: kind === 'group' ? tt('group.new') : tt('tag.new'), onClick: function () { openGroupTagEdit(kind, null); } }, Icon('plus', 13)),
-        h('button', { className: 'em-btn', onClick: function () { setDialog({ type: 'manage', kind: kind }); } }, tt('filter.manage'))
+        manage ? h('button', { className: 'em-btn icon', title: kind === 'group' ? tt('group.new') : tt('tag.new'), onClick: function () { openGroupTagEdit(kind, null); } }, Icon('plus', 13)) : null,
+        manage ? h('button', { className: 'em-btn', onClick: function () { setDialog({ type: 'manage', kind: kind }); } }, tt('filter.manage')) : null
       );
     }
 
@@ -867,8 +872,19 @@ function build(require) {
       setTagFilters(function (cur) { var arr = (cur || []).slice(); var i = arr.indexOf(id); if (i >= 0) arr.splice(i, 1); else arr.push(id); return arr; });
     }
 
+    function toggleSource(id) {
+      setSourceFilters(function (cur) { var arr = (cur || []).slice(); var i = arr.indexOf(id); if (i >= 0) arr.splice(i, 1); else arr.push(id); return arr; });
+    }
+
+    function sourceCount(src) { var n = 0; items.forEach(function (it) { if (it.sources.indexOf(src) !== -1) n += 1; }); return n; }
+
     function renderFilters() {
       var gFacets = groupFacets(), tFacets = tagFacets();
+      var sChips = [filterChip('__all', tt('filter.all'), items.length, !(sourceFilters && sourceFilters.length), function () { setSourceFilters([]); })];
+      var srcColor = { process: 'var(--dsw-alias-state-success-primary)', user: 'var(--dsw-alias-brand-primary)', machine: 'var(--dsw-alias-state-warn-primary)' };
+      [['process', tt('src.process')], ['user', tt('src.user')], ['machine', tt('src.machine')]].forEach(function (p) {
+        sChips.push(filterChip('src-' + p[0], p[1], sourceCount(p[0]), (sourceFilters || []).indexOf(p[0]) !== -1, function () { toggleSource(p[0]); }, srcColor[p[0]]));
+      });
       var gChips = [filterChip('__all', tt('filter.all'), items.length, !groupFilter, function () { setGroupFilter(null); })];
       gFacets.forEach(function (f) { gChips.push(filterChip(f.id, f.name, f.count, groupFilter === f.id, function () { setGroupFilter(groupFilter === f.id ? null : f.id); }, f.color)); });
       var gNone = ungroupedCount();
@@ -878,6 +894,7 @@ function build(require) {
       var tNone = untaggedCount();
       if (tNone > 0 || tagFilters.indexOf('__none__') !== -1) tChips.push(filterChip('__none__', tt('filter.untagged'), tNone, tagFilters.indexOf('__none__') !== -1, function () { toggleTag('__none__'); }));
       return h('div', { className: 'em-filters' },
+        filterRow('source', tt('filter.source'), sChips),
         filterRow('group', tt('filter.group'), gChips),
         filterRow('tag', tt('filter.tag'), tChips)
       );
@@ -996,12 +1013,6 @@ function build(require) {
           h('span', { className: 'em-sub' }, subtitle)
         ),
         h('label', { className: 'em-search' }, Icon('tag', 14), h('input', { value: query, placeholder: tt('toolbar.search'), onChange: function (e) { setQuery(e.target.value); } })),
-        h('select', { className: 'em-select', style: { width: 'auto' }, value: sourceFilter, onChange: function (e) { setSourceFilter(e.target.value); } },
-          h('option', { value: 'all' }, tt('toolbar.allSources')),
-          h('option', { value: 'process' }, tt('src.process')),
-          h('option', { value: 'user' }, tt('src.user')),
-          h('option', { value: 'machine' }, tt('src.machine'))
-        ),
         h('button', { className: 'em-btn', onClick: function () { setShowValues(!showValues); } }, Icon(showValues ? 'eyeOff' : 'eye', 14), showValues ? tt('toolbar.hideValues') : tt('toolbar.showValues')),
         h('button', { className: 'em-btn icon', title: tt('toolbar.refresh'), onClick: load }, Icon('refresh', 15)),
         h('button', { className: 'em-btn primary', onClick: function () { openValueEditor(null); } }, Icon('plus', 14), tt('toolbar.new')),
