@@ -21,7 +21,7 @@ import path from 'node:path';
 export const name = 'dsh-envhub';
 
 /** Host services this route needs; the client half stays independent. */
-export const inject = ['webServer', 'connection'];
+export const inject = ['webServer', 'connection', 'tools', 'systemPrompt'];
 
 const ROUTE = '/envhub/api';
 const MAX_BODY_BYTES = 512 * 1024;
@@ -630,9 +630,191 @@ async function dispatch(action, body) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Agent supply: read-only tools + prompt section                      */
+/* ------------------------------------------------------------------ */
+
+const PROMPT_SECTION_TEXT = [
+  '## 环境变量（dsh-EnvHub）',
+  '本机已安装 dsh-EnvHub，环境变量按「分组 / 标签」组织。变量值是机密，任何工具都不会返回值本身。',
+  '- 查看有哪些分组/标签：调用 `envhub_catalog`（仅名称与数量）。',
+  '- 按分组 / 标签 / 关键字查变量键名：调用 `envhub_keys`（返回 KEY、所属组、标签、来源、是否敏感，不含 value）。',
+  '- 使用变量：拿到 KEY 后，在命令中通过环境变量引用（PowerShell `$env:KEY`、bash `$KEY`）。不要 echo / 打印 / 导出变量值，也不要用其它 shell 命令读取值。',
+  '- 若确实需要值本身或需要修改环境变量，请让用户在 dsh-EnvHub 面板中操作。',
+].join('\n');
+
+const AGENT_TOOL_OUTPUT = {
+  schema: { type: 'object', additionalProperties: true },
+  render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+};
+
+function catalogOf(meta, items) {
+  var groups = (meta.groups || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  var tags = (meta.tags || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  var gc = {};
+  var tc = {};
+  items.forEach(function (it) {
+    var e = (meta.entries || {})[it.name] || {};
+    if (e.group) gc[e.group] = (gc[e.group] || 0) + 1;
+    (e.tags || []).forEach(function (t) { tc[t] = (tc[t] || 0) + 1; });
+  });
+  return {
+    totalKeys: items.length,
+    groups: groups.map(function (g) { return { name: g.name || g.id, count: gc[g.id] || 0 }; }),
+    tags: tags.map(function (t) { return { name: t.name || t.id, count: tc[t.id] || 0 }; }),
+  };
+}
+
+function resolveGroup(meta, ref) {
+  var groups = meta.groups || [];
+  var key = String(ref).trim().toLowerCase();
+  var byId = groups.filter(function (g) { return String(g.id).toLowerCase() === key; });
+  if (byId.length === 1) return { id: byId[0].id, name: byId[0].name || byId[0].id };
+  var byName = groups.filter(function (g) { return String(g.name || g.id).trim().toLowerCase() === key; });
+  if (byName.length === 1) return { id: byName[0].id, name: byName[0].name || byName[0].id };
+  return { error: 'unknown-group', message: '未找到该分组', valid: groups.map(function (g) { return g.name || g.id; }) };
+}
+
+function resolveTags(meta, refs) {
+  var tags = meta.tags || [];
+  var ids = [];
+  var unknown = [];
+  refs.forEach(function (ref) {
+    var key = String(ref).trim().toLowerCase();
+    var hit = tags.filter(function (t) { return String(t.id).toLowerCase() === key || String(t.name || t.id).trim().toLowerCase() === key; });
+    if (hit.length === 1) ids.push(hit[0].id);
+    else unknown.push(String(ref));
+  });
+  if (unknown.length) return { error: 'unknown-tag', message: '未找到标签：' + unknown.join(', '), valid: tags.map(function (t) { return t.name || t.id; }) };
+  return { ids: ids };
+}
+
+function projectKey(meta, it) {
+  var e = (meta.entries || {})[it.name] || {};
+  var gname = null;
+  if (e.group) {
+    var g = (meta.groups || []).filter(function (x) { return x.id === e.group; })[0];
+    if (g) gname = g.name || g.id;
+  }
+  var tnames = (e.tags || []).map(function (tid) {
+    var t = (meta.tags || []).filter(function (x) { return x.id === tid; })[0];
+    return t ? (t.name || t.id) : null;
+  }).filter(Boolean);
+  return { key: it.name, group: gname, tags: tnames, sources: (it.sources || []).slice(), sensitive: it.sensitive === true };
+}
+
+async function buildAgentSnapshot() {
+  var registry;
+  try {
+    registry = await readRegistry(false);
+  } catch (error) {
+    return { error: 'read-failed', message: String((error && error.message) || error) };
+  }
+  var meta = await readState();
+  return { meta: meta, items: buildItems(registry) };
+}
+
+async function toolCatalog() {
+  var snap = await buildAgentSnapshot();
+  if (snap.error) return snap;
+  return catalogOf(snap.meta, snap.items);
+}
+
+async function toolKeys(args) {
+  var snap = await buildAgentSnapshot();
+  if (snap.error) return snap;
+  var meta = snap.meta;
+  var pool = snap.items;
+  if (args.group) {
+    var g = resolveGroup(meta, args.group);
+    if (g.error) return g;
+    pool = pool.filter(function (it) { var e = (meta.entries || {})[it.name] || {}; return e.group === g.id; });
+  }
+  if (Array.isArray(args.tags) && args.tags.length) {
+    var tr = resolveTags(meta, args.tags);
+    if (tr.error) return tr;
+    pool = pool.filter(function (it) {
+      var e = (meta.entries || {})[it.name] || {};
+      var ts = e.tags || [];
+      return tr.ids.some(function (id) { return ts.indexOf(id) !== -1; });
+    });
+  }
+  if (typeof args.search === 'string' && args.search.trim()) {
+    var q = args.search.trim().toLowerCase();
+    pool = pool.filter(function (it) { return it.name.toLowerCase().indexOf(q) !== -1; });
+  }
+  pool = pool.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var total = pool.length;
+  var limit = Number(args.limit);
+  limit = Number.isFinite(limit) ? Math.max(1, Math.min(500, Math.floor(limit))) : 100;
+  var offset = Number(args.offset);
+  offset = Number.isFinite(offset) ? Math.max(0, Math.floor(offset)) : 0;
+  var page = pool.slice(offset, offset + limit).map(function (it) { return projectKey(meta, it); });
+  return { total: total, offset: offset, limit: limit, keys: page };
+}
+
+const AGENT_TOOLS = [
+  {
+    name: 'envhub_catalog',
+    description: '列出本机 dsh-EnvHub 管理的环境变量分组与标签及各自数量。只返回名称与数量，绝不返回变量值。用于在查询具体变量键名前了解目录结构。',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+    output: AGENT_TOOL_OUTPUT,
+    execute: function () { return toolCatalog(); },
+  },
+  {
+    name: 'envhub_keys',
+    description: '按分组/标签/关键字查询本机环境变量的键名（KEY）。只返回键名、所属组、标签、来源、是否敏感，绝不返回变量值。拿到 KEY 后请在命令中通过环境变量引用（PowerShell $env:KEY、bash $KEY），不要打印或回显变量的值。',
+    parameters: {
+      type: 'object',
+      properties: {
+        group: { type: 'string', description: '分组名称或 id（大小写不敏感）。' },
+        tags: { type: 'array', items: { type: 'string' }, description: '一个或多个标签名称/id，命中任一即可（OR）。' },
+        search: { type: 'string', description: '对变量键名做不区分大小写的子串匹配；不会匹配值。' },
+        limit: { type: 'integer', minimum: 1, maximum: 500, description: '返回条数，默认 100，最大 500。' },
+        offset: { type: 'integer', minimum: 0, description: '分页偏移，默认 0。' },
+      },
+      additionalProperties: false,
+    },
+    output: AGENT_TOOL_OUTPUT,
+    execute: function (args) { return toolKeys(args || {}); },
+  },
+];
+
+function registerAgentFeatures(ctx) {
+  try {
+    var tools = ctx.tools || (typeof ctx.get === 'function' ? ctx.get('tools') : undefined);
+    if (tools && typeof tools.register === 'function') {
+      var disposers = [];
+      var install = function () {
+        AGENT_TOOLS.forEach(function (def) { disposers.push(tools.register(def)); });
+        return function () { disposers.forEach(function (d) { try { d(); } catch (ignored) { /* ignore */ } }); disposers = []; };
+      };
+      if (typeof ctx.effect === 'function') ctx.effect(install, 'envhub: agent tools');
+      else install();
+      try { console.log('[envhub] agent tools registered: envhub_catalog, envhub_keys'); } catch (ignored) { /* ignore */ }
+    } else {
+      try { console.warn('[envhub] tools service unavailable; agent tools not registered'); } catch (ignored) { /* ignore */ }
+    }
+  } catch (error) {
+    try { console.warn('[envhub] agent tools registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
+  }
+  try {
+    var prompt = ctx.systemPrompt || (typeof ctx.get === 'function' ? ctx.get('systemPrompt') : undefined);
+    if (prompt && typeof prompt.section === 'function') {
+      var reg = function () { return prompt.section({ name: 'envhub', order: 1000, text: PROMPT_SECTION_TEXT }); };
+      if (typeof ctx.effect === 'function') ctx.effect(reg, 'envhub: prompt section');
+      else reg();
+      try { console.log('[envhub] prompt section registered'); } catch (ignored) { /* ignore */ }
+    }
+  } catch (error) {
+    try { console.warn('[envhub] prompt section registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
+  }
+}
+
 /** Host loader entry: one authenticated route for the plugin UI. */
 export function apply(ctx) {
   try {
+    registerAgentFeatures(ctx);
     const webServer = ctx.webServer || (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined);
     const connection = ctx.connection || (typeof ctx.get === 'function' ? ctx.get('connection') : undefined);
     if (!webServer || typeof webServer.register !== 'function') {
@@ -712,6 +894,10 @@ export const __test__ = {
   listBackups,
   readState,
   saveState,
+  toolCatalog,
+  toolKeys,
+  catalogOf,
+  projectKey,
   PROTECTED,
   SENSITIVE,
 };

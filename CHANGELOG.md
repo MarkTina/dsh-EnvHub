@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+
+- 面向 Agent 的只读环境变量供给：
+  - 工具 `envhub_catalog`：列出全部分组/标签及数量（不含值）。
+  - 工具 `envhub_keys`：按 group / tags（多选 OR）/ search 查询变量键名与元数据（绝不返回值）。
+  - 系统提示段（`envhub`）：告知 Agent 可用工具、值不可见、以及用 `$env:KEY` 安全引用。
+
 ## 1.0.2
 
 ### Fixed

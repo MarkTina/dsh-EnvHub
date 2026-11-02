@@ -16,6 +16,15 @@
 - **安全默认**：变量值默认打码；名称含 `KEY/TOKEN/SECRET/PASSWORD` 等自动标记为敏感。
 - **快捷键**：默认 `Ctrl+Alt+E`（macOS 为 `Cmd+Alt+E`）打开/收起面板，可在 DSH「设置 → 通用 → 快捷键」中修改。
 
+## 给 Agent 的能力（只读供给）
+
+插件会向 Agent 注册两个**只读**工具（通过 DSH 的 `tools` 服务），并在系统提示中说明用法；**任何工具都不会返回值**：
+
+- `envhub_catalog`：列出所有分组/标签及数量（仅名称与数量）。
+- `envhub_keys`：按 `group` / `tags`（多选，命中任一）/ `search` 查询变量**键名**，返回 `key / group / tags / sources / sensitive`，不含 `value`；支持 `limit/offset` 分页。
+
+Agent 被要求在命令中使用 `$env:KEY` / `$KEY` 引用变量，而不是打印或读取其值。写操作（新增/修改/删除、导入写回）仍然只在用户面板中进行，不暴露给 Agent。
+
 ## 环境要求
 
 - DeepSeek Harness `>= 0.2.0-rc.2`
