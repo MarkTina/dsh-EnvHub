@@ -59,6 +59,10 @@ function build(require) {
     'view.dimGroup': '按分组',
     'view.dimTag': '按标签',
     'board.hint': '看板按当前筛选结果展示；点击卡片可编辑组织信息。',
+    'board.copyKey': '复制本列 Key',
+    'board.copyKV': '复制本列 Key 和 Value',
+    'board.select': '选择本列',
+    'board.unselect': '取消本列',
     'view.group': '按组',
     'view.tag': '按标签',
     'view.all': '全部',
@@ -456,6 +460,7 @@ function build(require) {
     + '.em-kcol-head{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);border-radius:12px 12px 0 0;}'
     + '.em-kcol-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
     + '.em-kcol-count{color:var(--dsw-alias-label-secondary);font-size:12px;margin-left:auto;}'
+    + '.em-kcol-actions{display:flex;gap:2px;align-items:center;flex:none;}'
     + '.em-kcol-body{display:flex;flex-direction:column;gap:8px;padding:8px;}'
     + '.em-kcol-empty{color:var(--dsw-alias-label-secondary);font-size:12px;padding:14px;text-align:center;}'
     + '.em-kcard{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-base);padding:8px 10px;cursor:pointer;}'
@@ -957,11 +962,16 @@ function build(require) {
       var cols = boardColumns();
       if (!cols.length) return h('div', { className: 'em-empty' }, h('b', null, boardDim === 'group' ? tt('groups.empty') : tt('tags.empty')));
       return h('div', { className: 'em-board' }, cols.map(function (c) {
+        var allOn = c.items.length > 0 && c.items.every(function (it) { return selected[it.name] === true; });
         return h('div', { key: c.id === null ? '__none__' : c.id, className: 'em-kcol' },
           h('div', { className: 'em-kcol-head' },
             c.color ? h('span', { className: 'em-dot', style: { background: c.color } }) : null,
             h('span', { className: 'em-kcol-name' }, c.name),
-            h('span', { className: 'em-kcol-count' }, c.items.length)),
+            h('span', { className: 'em-kcol-count' }, c.items.length),
+            h('span', { className: 'em-kcol-actions' },
+              h('button', { className: 'em-icon-btn', title: tt('board.copyKey'), disabled: c.items.length === 0, onClick: function () { doCopy(c.items, false); } }, Icon('copy', 13)),
+              h('button', { className: 'em-icon-btn', title: tt('board.copyKV'), disabled: c.items.length === 0, onClick: function () { doCopy(c.items, true); } }, Icon('copy', 13)),
+              h('button', { className: 'em-icon-btn', title: allOn ? tt('board.unselect') : tt('board.select'), disabled: c.items.length === 0, onClick: function () { selectMany(c.items, !allOn); } }, Icon(allOn ? 'check' : 'plus', 13)))),
           h('div', { className: 'em-kcol-body' },
             c.items.length ? c.items.map(renderKCard) : h('div', { className: 'em-kcol-empty' }, tt('empty.title')))
         );
