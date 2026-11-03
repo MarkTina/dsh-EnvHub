@@ -1463,7 +1463,9 @@ function build(require) {
   }
 
   return {
-    inject: ['slots'],
+    // 不在入口声明 inject: ['slots']：入口零强依赖，apply 立即执行（注入样式、注册快捷键、注册 locale）；
+    // 侧栏与主面板座位在 slots 就绪后由 apply 内的 ctx.inject(['slots']) 响应式挂载。
+    // 这样可避免重启后因 slots 尚未就绪而让整个插件停在 pending、需要手动禁用/启用才恢复。
     apply: function apply(ctx) {
       try {
         if (typeof ctx.effect === 'function') ctx.effect(ensureStyles, 'envhub: styles');

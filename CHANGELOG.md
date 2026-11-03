@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.3
+
+### Fixed
+
+- 修复「DSH 重启后插件不自动加载、需要手动禁用/启用才激活」的问题。
+  - 根因：`index.js` 顶层 `export const inject = [...]`、`client.js` 顶层 `inject: ['slots']` 是**硬依赖**——任一被列出的服务（`webServer`/`connection`/`tools`/`systemPrompt`/`slots`）在插件初始化时尚未就绪，整个插件就会停在 pending、`apply` 不执行。
+  - 修复：入口改为零强依赖，`apply` 立即执行；API 路由、Agent 工具、系统提示、客户端侧栏/主面板座位分别在对应服务就绪时通过 `ctx.inject(...)` 响应式挂载，不再因单个服务迟到而拖垮整个插件的加载。
+
 ## 1.2.2
 
 ### Added
