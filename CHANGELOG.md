@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.5
+
+### Fixed
+
+- 修复 1.2.4 之后的新问题：`/envhub/api` 路由已注册（GET 405 而非 404），但信任栅栏用错了 `connection` 实例，前端读取报 `HTTP 403`。
+  - 根因：1.2.3 起把 `connection` 从顶层 `inject` 移除、改为在 handler 里 `ctx.get('connection')` 惰性获取，拿到的是未正确绑定的实例，`requestRejection` 一律拒绝（GET/POST 均 403）。
+  - 修复：恢复为 `export const inject = ['webServer', 'connection']`，在 `apply` 时捕获注入的 `connection` 并用于 `requestRejection`；`tools`/`systemPrompt` 仍通过 `ctx.get` 惰性获取、不进入 inject，以免其就绪时机拖累插件激活。Host 加载方式回到 1.2.2 的已知可用形态。
+
 ## 1.2.4
 
 ### Fixed

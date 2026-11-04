@@ -20,18 +20,9 @@ import path from 'node:path';
 /** Plugin identity for loader rows. */
 export const name = 'dsh-envhub';
 
-/**
- * 只把 webServer 声明为顶层强依赖。
- *
- * webServer 是 /envhub/api 路由挂载的硬前提，且它是启动期常驻的核心服务（webserver），
- * 声明后 apply 会在 webServer 就绪时执行，保证路由一定被注册。
- * （1.2.3 曾改为在 apply 内部用 ctx.inject(['webServer']) 延迟挂载，实测该延迟路径在
- *  插件初始化阶段不可靠，导致路由缺失、前端读取报 HTTP 405 —— 现恢复为顶层 inject。）
- *
- * connection / tools / systemPrompt 仍保持惰性：connection 每次请求时解析，
- * tools/systemPrompt 由 ctx.inject 响应式挂载，避免它们拖垮整插件激活。
- */
-export const inject = ['webServer'];
+/** 路由与信任栅栏只需要 webServer + connection（均为启动期常驻核心服务）；
+ *  tools/systemPrompt 不放进 inject，通过 ctx.get 惰性获取，避免其就绪时机拖累插件激活。 */
+export const inject = ['webServer', 'connection'];
 
 const ROUTE = '/envhub/api';
 const MAX_BODY_BYTES = 512 * 1024;
@@ -791,132 +782,102 @@ const AGENT_TOOLS = [
 ];
 
 function registerAgentFeatures(ctx) {
-  function mountTools(scope) {
-    try {
-      var tools = (scope && scope.tools) || (typeof ctx.get === 'function' ? ctx.get('tools') : undefined);
-      if (!tools || typeof tools.register !== 'function') return;
+  try {
+    var tools = ctx.tools || (typeof ctx.get === 'function' ? ctx.get('tools') : undefined);
+    if (tools && typeof tools.register === 'function') {
       var disposers = [];
       var install = function () {
         AGENT_TOOLS.forEach(function (def) { disposers.push(tools.register(def)); });
         return function () { disposers.forEach(function (d) { try { d(); } catch (ignored) { /* ignore */ } }); disposers = []; };
       };
-      if (scope && typeof scope.effect === 'function') scope.effect(install, 'envhub: agent tools');
-      else if (typeof ctx.effect === 'function') ctx.effect(install, 'envhub: agent tools');
+      if (typeof ctx.effect === 'function') ctx.effect(install, 'envhub: agent tools');
       else install();
       try { console.log('[envhub] agent tools registered: envhub_catalog, envhub_keys'); } catch (ignored) { /* ignore */ }
-    } catch (error) {
-      try { console.warn('[envhub] agent tools registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
+    } else {
+      try { console.warn('[envhub] tools service unavailable; agent tools not registered'); } catch (ignored) { /* ignore */ }
     }
+  } catch (error) {
+    try { console.warn('[envhub] agent tools registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
   }
-  function mountPrompt(scope) {
-    try {
-      var prompt = (scope && scope.systemPrompt) || (typeof ctx.get === 'function' ? ctx.get('systemPrompt') : undefined);
-      if (!prompt || typeof prompt.section !== 'function') return;
+  try {
+    var prompt = ctx.systemPrompt || (typeof ctx.get === 'function' ? ctx.get('systemPrompt') : undefined);
+    if (prompt && typeof prompt.section === 'function') {
       var reg = function () { return prompt.section({ name: 'envhub', order: 1000, text: PROMPT_SECTION_TEXT }); };
-      if (scope && typeof scope.effect === 'function') scope.effect(reg, 'envhub: prompt section');
-      else if (typeof ctx.effect === 'function') ctx.effect(reg, 'envhub: prompt section');
+      if (typeof ctx.effect === 'function') ctx.effect(reg, 'envhub: prompt section');
       else reg();
       try { console.log('[envhub] prompt section registered'); } catch (ignored) { /* ignore */ }
-    } catch (error) {
-      try { console.warn('[envhub] prompt section registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
     }
+  } catch (error) {
+    try { console.warn('[envhub] prompt section registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
   }
-  // 响应式：tools / systemPrompt 就绪时再挂载；未就绪不会阻塞插件本体加载。
-  if (typeof ctx.inject === 'function') {
-    try { ctx.inject(['tools'], mountTools); } catch (error) { try { console.warn('[envhub] tools injection failed:', error && error.message); } catch (ignored) { /* ignore */ } }
-    try { ctx.inject(['systemPrompt'], mountPrompt); } catch (error) { try { console.warn('[envhub] systemPrompt injection failed:', error && error.message); } catch (ignored) { /* ignore */ } }
-  } else {
-    mountTools(ctx);
-    mountPrompt(ctx);
-  }
-}
-
-/** Attach the single authenticated API route. Returns true when webServer was available. */
-function mountRoute(ctx) {
-  const webServer = ctx.webServer || (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined);
-  if (!webServer || typeof webServer.register !== 'function') return false;
-
-  const handler = async (req, res) => {
-    let rejection;
-    try {
-      // connection 每次请求时惰性解析：既是信任栅栏，也避免把它变成插件加载的硬依赖。
-      const connection = ctx.connection || (typeof ctx.get === 'function' ? ctx.get('connection') : undefined);
-      rejection = connection && typeof connection.requestRejection === 'function'
-        ? connection.requestRejection(req)
-        : undefined;
-    } catch (ignored) {
-      rejection = 403;
-    }
-    if (rejection !== undefined) {
-      res.statusCode = rejection;
-      res.end();
-      return;
-    }
-    if (req.method !== 'POST') {
-      res.statusCode = 405;
-      res.setHeader('allow', 'POST');
-      res.end();
-      return;
-    }
-    const mediaType = String(req.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
-    if (mediaType !== 'application/json') {
-      sendJson(res, 415, { ok: false, code: 'unsupported-media-type', message: 'content-type must be application/json' });
-      return;
-    }
-    let text;
-    try {
-      text = await readBody(req);
-    } catch (ignored) {
-      sendJson(res, 400, { ok: false, code: 'bad-request', message: 'request body unreadable' });
-      return;
-    }
-    if (text === null) {
-      sendJson(res, 413, { ok: false, code: 'payload-too-large', message: 'request body is too large' });
-      return;
-    }
-    let body;
-    try {
-      body = text ? JSON.parse(text) : {};
-    } catch (ignored) {
-      sendJson(res, 400, { ok: false, code: 'bad-request', message: 'body must be JSON' });
-      return;
-    }
-    let result;
-    try {
-      result = await dispatch(body && body.action, body || {});
-    } catch (error) {
-      result = { ok: false, code: 'internal-error', message: error && error.message };
-    }
-    sendJson(res, 200, result);
-  };
-
-  const register = () => webServer.register({ kind: 'exact', path: ROUTE, handler });
-  if (typeof ctx.effect === 'function') ctx.effect(register, 'envhub: api route');
-  else register();
-  return true;
 }
 
 /** Host loader entry: one authenticated route for the plugin UI. */
 export function apply(ctx) {
   try {
-    // Agent 供给：tools / systemPrompt 就绪时再挂载，未就绪也不阻塞插件本体。
     registerAgentFeatures(ctx);
-
-    // API 路由：webServer 就绪则立即挂载；否则等待其出现后自动挂载。
-    if (mountRoute(ctx)) return;
-    if (typeof ctx.inject === 'function') {
-      try {
-        ctx.inject(['webServer'], function (scope) {
-          try { mountRoute(scope); } catch (error) {
-            try { console.warn('[envhub] route mount failed:', error && error.message); } catch (ignored) { /* ignore */ }
-          }
-        });
-      } catch (error) {
-        try { console.warn('[envhub] webServer injection failed:', error && error.message); } catch (ignored) { /* ignore */ }
-      }
-    } else {
+    const webServer = ctx.webServer || (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined);
+    const connection = ctx.connection || (typeof ctx.get === 'function' ? ctx.get('connection') : undefined);
+    if (!webServer || typeof webServer.register !== 'function') {
       try { console.warn('[envhub] webServer service unavailable; API route not registered'); } catch (ignored) { /* ignore */ }
+      return;
     }
+
+    const handler = async (req, res) => {
+      let rejection;
+      try {
+        rejection = connection && typeof connection.requestRejection === 'function'
+          ? connection.requestRejection(req)
+          : undefined;
+      } catch (ignored) {
+        rejection = 403;
+      }
+      if (rejection !== undefined) {
+        res.statusCode = rejection;
+        res.end();
+        return;
+      }
+      if (req.method !== 'POST') {
+        res.statusCode = 405;
+        res.setHeader('allow', 'POST');
+        res.end();
+        return;
+      }
+      const mediaType = String(req.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+      if (mediaType !== 'application/json') {
+        sendJson(res, 415, { ok: false, code: 'unsupported-media-type', message: 'content-type must be application/json' });
+        return;
+      }
+      let text;
+      try {
+        text = await readBody(req);
+      } catch (ignored) {
+        sendJson(res, 400, { ok: false, code: 'bad-request', message: 'request body unreadable' });
+        return;
+      }
+      if (text === null) {
+        sendJson(res, 413, { ok: false, code: 'payload-too-large', message: 'request body is too large' });
+        return;
+      }
+      let body;
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch (ignored) {
+        sendJson(res, 400, { ok: false, code: 'bad-request', message: 'body must be JSON' });
+        return;
+      }
+      let result;
+      try {
+        result = await dispatch(body && body.action, body || {});
+      } catch (error) {
+        result = { ok: false, code: 'internal-error', message: error && error.message };
+      }
+      sendJson(res, 200, result);
+    };
+
+    const register = () => webServer.register({ kind: 'exact', path: ROUTE, handler });
+    if (typeof ctx.effect === 'function') ctx.effect(register, 'envhub: api route');
+    else register();
   } catch (error) {
     try { console.warn('[envhub] route registration failed:', error && error.message); } catch (ignored) { /* ignore */ }
   }
