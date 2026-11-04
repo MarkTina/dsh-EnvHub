@@ -21,16 +21,17 @@ import path from 'node:path';
 export const name = 'dsh-envhub';
 
 /**
- * 不声明顶层 inject。
+ * 只把 webServer 声明为顶层强依赖。
  *
- * 顶层 inject 是「硬依赖」：任一被列出的服务在插件初始化时尚未 provide，整个插件
- * 就会停在 pending，apply 根本不会执行 —— 表现为 DSH 重启后插件不自动加载、必须
- * 手动「禁用/启用」才恢复。而 webServer / connection / tools / systemPrompt 的就绪
- * 时机与加载顺序并不稳定（connection 与 agent 相关服务尤其可能晚于本插件出现）。
+ * webServer 是 /envhub/api 路由挂载的硬前提，且它是启动期常驻的核心服务（webserver），
+ * 声明后 apply 会在 webServer 就绪时执行，保证路由一定被注册。
+ * （1.2.3 曾改为在 apply 内部用 ctx.inject(['webServer']) 延迟挂载，实测该延迟路径在
+ *  插件初始化阶段不可靠，导致路由缺失、前端读取报 HTTP 405 —— 现恢复为顶层 inject。）
  *
- * 故入口保持零强依赖：apply 立即执行，各项能力在对应服务就绪时通过 ctx.inject(...)
- * 响应式挂载；任何服务迟到或缺失都不再拖垮整个插件的加载。
+ * connection / tools / systemPrompt 仍保持惰性：connection 每次请求时解析，
+ * tools/systemPrompt 由 ctx.inject 响应式挂载，避免它们拖垮整插件激活。
  */
+export const inject = ['webServer'];
 
 const ROUTE = '/envhub/api';
 const MAX_BODY_BYTES = 512 * 1024;

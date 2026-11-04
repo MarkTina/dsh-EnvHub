@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.4
+
+### Fixed
+
+- 修复 1.2.3 引入的回归：`/envhub/api` 路由在启动时未注册，前端读取环境变量报 `HTTP 405`。
+  - 根因：1.2.3 去掉了顶层 `inject`，改成在 `apply` 内用 `ctx.inject(['webServer'])` 延迟挂载路由；该延迟路径在插件初始化阶段不可靠，导致路由缺失（GET 404 / POST 405）。
+  - 修复：把 `webServer` 恢复为顶层强依赖 `export const inject = ['webServer']`，确保 `apply` 在 webServer 就绪时执行并注册路由；`connection`/`tools`/`systemPrompt` 仍惰性获取，不影响自动加载。
+
 ## 1.2.3
 
 ### Fixed
