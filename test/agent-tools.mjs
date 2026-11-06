@@ -23,4 +23,10 @@ console.log('filter.search=AGENT total=', s.total);
 const unk = await t.toolKeys({ group: '__nope__' });
 console.log('unknown.group=', JSON.stringify(unk));
 
+if (all.keys.length) {
+  const meta = await t.toolGetMeta({ key: all.keys[0].key });
+  console.log('get_meta=', JSON.stringify(meta), 'hasValue=', Object.prototype.hasOwnProperty.call(meta, 'value'));
+  if (Object.prototype.hasOwnProperty.call(meta, 'value')) process.exit(1);
+}
+
 process.exit(hasValue ? 1 : 0);
